@@ -1,4 +1,6 @@
 full-corpus pulse recipe scan
 triggered: 2026-08-14
+pass: refined-v2
 branch: agent/pulse-relationship-analysis-v1
 parameters: composition floor=0.001s, window=6s, step=3s, onset tolerance=0.005s, density scales=4/8/16s
+refinement: phase spread/ioi <=0.10; residual phase after removing whole-IOI offset; simple-fraction tolerance=0.03 IOI
