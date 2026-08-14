@@ -1,0 +1,46 @@
+{
+  "target": "nes_2a03",
+  "constraint_mode": "hardware_inspired",
+  "tempo_bpm": 150,
+  "voices": {
+    "pulse_1": {
+      "type": "pulse",
+      "events": [
+        {"start_beat": 0.0, "duration_beats": 0.5, "midi_note": 76, "duty": 0.25},
+        {"start_beat": 0.5, "duration_beats": 0.5, "midi_note": 79, "duty": 0.25},
+        {"start_beat": 1.0, "duration_beats": 1.0, "midi_note": 81, "duty": 0.5},
+        {"start_beat": 2.5, "duration_beats": 0.5, "midi_note": 79, "duty": 0.25},
+        {"start_beat": 3.0, "duration_beats": 1.0, "midi_note": 76, "duty": 0.25}
+      ]
+    },
+    "pulse_2": {
+      "type": "pulse",
+      "events": [
+        {"start_beat": 0.0, "duration_beats": 0.25, "midi_note": 64, "duty": 0.125},
+        {"start_beat": 0.25, "duration_beats": 0.25, "midi_note": 67, "duty": 0.125},
+        {"start_beat": 0.5, "duration_beats": 0.25, "midi_note": 71, "duty": 0.125},
+        {"start_beat": 0.75, "duration_beats": 0.25, "midi_note": 67, "duty": 0.125},
+        {"start_beat": 2.0, "duration_beats": 0.5, "midi_note": 64, "duty": 0.25},
+        {"start_beat": 3.0, "duration_beats": 0.5, "midi_note": 67, "duty": 0.25}
+      ]
+    },
+    "triangle": {
+      "type": "triangle",
+      "events": [
+        {"start_beat": 0.0, "duration_beats": 1.0, "midi_note": 40},
+        {"start_beat": 1.0, "duration_beats": 1.0, "midi_note": 43},
+        {"start_beat": 2.0, "duration_beats": 1.0, "midi_note": 36},
+        {"start_beat": 3.0, "duration_beats": 1.0, "midi_note": 43}
+      ]
+    },
+    "noise": {
+      "type": "noise",
+      "events": [
+        {"start_beat": 0.0, "duration_beats": 0.125, "noise_period": 4, "mode": "long"},
+        {"start_beat": 1.0, "duration_beats": 0.125, "noise_period": 8, "mode": "long"},
+        {"start_beat": 2.0, "duration_beats": 0.125, "noise_period": 4, "mode": "long"},
+        {"start_beat": 3.0, "duration_beats": 0.125, "noise_period": 8, "mode": "long"}
+      ]
+    }
+  }
+}
