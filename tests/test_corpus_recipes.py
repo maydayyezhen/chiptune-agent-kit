@@ -1,6 +1,7 @@
-from chiptune_agent_kit.analysis.corpus_recipes import (
-    detect_window_recipes,
-    summarize_corpus_scan,
+from chiptune_agent_kit.analysis.corpus_recipes import detect_window_recipes
+from chiptune_agent_kit.analysis.corpus_recipes_refined import (
+    _refine_phase_candidate,
+    summarize_refined_corpus_scan,
 )
 from chiptune_agent_kit.analysis.nes_midi import NoteSpan
 
@@ -28,7 +29,7 @@ def test_detects_parallel_interval_lock() -> None:
     assert lock["evidence"]["longest_constant_interval_run"]["length"] == 12
 
 
-def test_detects_phase_shifted_riff_interlock() -> None:
+def test_refines_stable_phase_shift_to_half_ioi_residual() -> None:
     pitches = [66, 59, 71, 66, 69, 64, 66, 59, 71, 66, 69, 64]
     pulse_2 = [
         NoteSpan(pitch, index * 0.2, index * 0.2 + 0.20)
@@ -48,14 +49,31 @@ def test_detects_phase_shifted_riff_interlock() -> None:
     )
 
     phase = next(item for item in recipes if item["recipe"] == "phase_shifted_riff_interlock")
-    evidence = phase["evidence"]
+    refined = _refine_phase_candidate(phase)
+    assert refined is not None
+    evidence = refined["evidence"]
     assert evidence["pitch_match_ratio"] == 1.0
     assert abs(evidence["median_time_offset_seconds_p1_minus_p2"] - 0.1) < 1e-9
-    assert abs(evidence["absolute_phase_fraction_of_median_voice_ioi"] - 0.5) < 1e-9
-    assert evidence["nearest_simple_phase_fraction"] == "1/2"
+    assert abs(evidence["absolute_residual_phase_fraction"] - 0.5) < 1e-9
+    assert evidence["simple_residual_phase_fraction"] == "1/2"
+    assert evidence["phase_stability_spread_ioi_ratio"] < 1e-9
 
 
-def test_summary_counts_song_prevalence_not_window_hits() -> None:
+def test_refinement_rejects_unstable_phase_offset() -> None:
+    candidate = {
+        "recipe": "phase_shifted_riff_interlock",
+        "window": [0.0, 6.0],
+        "evidence": {
+            "pitch_match_ratio": 1.0,
+            "median_voice_ioi_seconds": 0.2,
+            "median_time_offset_seconds_p1_minus_p2": 0.1,
+            "time_offset_spread_seconds": 0.03,
+        },
+    }
+    assert _refine_phase_candidate(candidate) is None
+
+
+def test_refined_summary_counts_prevalence_and_harmonic_family() -> None:
     songs = [
         {
             "name": "one.mid",
@@ -78,6 +96,7 @@ def test_summary_counts_song_prevalence_not_window_hits() -> None:
                     "duration_seconds": 9.0,
                 }
             ],
+            "refinement": {"rejected_unstable_phase_windows": 0},
         },
         {
             "name": "two.mid",
@@ -86,11 +105,13 @@ def test_summary_counts_song_prevalence_not_window_hits() -> None:
             "recipes_present": [],
             "candidates": [],
             "episodes": [],
+            "refinement": {"rejected_unstable_phase_windows": 0},
         },
     ]
 
-    summary = summarize_corpus_scan(songs, files_found=2)
+    summary = summarize_refined_corpus_scan(songs, files_found=2)
     lock = summary["recipes"]["parallel_interval_lock"]
     assert lock["songs"] == 1
     assert lock["window_hits"] == 2
     assert lock["prevalence_of_two_pulse_songs"] == 0.5
+    assert lock["harmonic_family_song_counts"]["unison_octave"] == 1
