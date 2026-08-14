@@ -13,6 +13,7 @@ from chiptune_agent_kit.analysis import (
 )
 
 VOICE_NAMES = ("pulse_1", "pulse_2", "triangle", "noise")
+ONSET_TOLERANCES_SECONDS = (0.002, 0.005, 0.010, 0.030)
 
 
 def _mean(values: list[float]) -> float | None:
@@ -104,6 +105,52 @@ def _relationship_summary(results: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _relationship_sensitivity_summary(
+    results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    output: dict[str, Any] = {}
+    for tolerance in ONSET_TOLERANCES_SECONDS:
+        key = f"{tolerance:.3f}"
+        relations = [
+            item["relationships"]["pulse_1_pulse_2_sensitivity"][key]
+            for item in results
+            if item["voices"]["pulse_1"]["note_count"] > 0
+            and item["voices"]["pulse_2"]["note_count"] > 0
+        ]
+
+        def values(section: str, field: str) -> list[float | None]:
+            return [relation[section][field] for relation in relations]
+
+        output[key] = {
+            "tolerance_seconds": tolerance,
+            "mean_synchronized_onset_ratio": _mean_present(
+                values("onset_relationship", "synchronized_onset_ratio")
+            ),
+            "mean_third_like_ratio": _mean_present(
+                values("onset_relationship", "third_like_ratio")
+            ),
+            "mean_sixth_like_ratio": _mean_present(
+                values("onset_relationship", "sixth_like_ratio")
+            ),
+            "mean_unison_octave_like_ratio": _mean_present(
+                values("onset_relationship", "unison_octave_like_ratio")
+            ),
+            "mean_similar_direction_ratio": _mean_present(
+                values("motion_relationship", "similar_direction_ratio")
+            ),
+            "mean_contrary_ratio": _mean_present(
+                values("motion_relationship", "contrary_ratio")
+            ),
+            "mean_interval_preserving_parallel_ratio": _mean_present(
+                values(
+                    "motion_relationship",
+                    "interval_preserving_parallel_ratio",
+                )
+            ),
+        }
+    return output
+
+
 def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     voices: dict[str, dict[str, Any]] = {}
 
@@ -160,6 +207,9 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
         ),
         "voices": voices,
         "pulse_1_pulse_2": _relationship_summary(results),
+        "pulse_1_pulse_2_onset_sensitivity": (
+            _relationship_sensitivity_summary(results)
+        ),
     }
 
 
@@ -211,8 +261,16 @@ def main() -> None:
     results: list[dict[str, Any]] = []
     for path in files:
         item = analyze_nes_midi(path)
+        sensitivity = {
+            f"{tolerance:.3f}": analyze_pulse_relationships_from_midi(
+                path,
+                onset_tolerance_seconds=tolerance,
+            )
+            for tolerance in ONSET_TOLERANCES_SECONDS
+        }
         item["relationships"] = {
-            "pulse_1_pulse_2": analyze_pulse_relationships_from_midi(path)
+            "pulse_1_pulse_2": sensitivity["0.005"],
+            "pulse_1_pulse_2_sensitivity": sensitivity,
         }
         results.append(item)
 

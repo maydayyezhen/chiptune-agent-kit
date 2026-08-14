@@ -42,6 +42,7 @@ jobs:
           d = json.loads(p.read_text(encoding='utf-8'))
           print(json.dumps(d['sample'], indent=2))
           print(json.dumps(d['summary']['pulse_1_pulse_2'], indent=2))
+          print(json.dumps(d['summary']['pulse_1_pulse_2_onset_sensitivity'], indent=2))
           PY
 
       - uses: actions/upload-artifact@v4
