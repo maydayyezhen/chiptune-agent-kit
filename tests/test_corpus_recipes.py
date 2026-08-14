@@ -31,11 +31,11 @@ def test_detects_parallel_interval_lock() -> None:
 def test_detects_phase_shifted_riff_interlock() -> None:
     pitches = [66, 59, 71, 66, 69, 64, 66, 59, 71, 66, 69, 64]
     pulse_2 = [
-        NoteSpan(pitch, index * 0.2, index * 0.2 + 0.19)
+        NoteSpan(pitch, index * 0.2, index * 0.2 + 0.20)
         for index, pitch in enumerate(pitches)
     ]
     pulse_1 = [
-        NoteSpan(pitch, index * 0.2 + 0.1, index * 0.2 + 0.29)
+        NoteSpan(pitch, index * 0.2 + 0.1, index * 0.2 + 0.30)
         for index, pitch in enumerate(pitches)
     ]
 
