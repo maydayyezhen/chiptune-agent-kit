@@ -1,0 +1,47 @@
+name: nesmdb-smoke
+
+on:
+  push:
+    paths:
+      - "src/chiptune_agent_kit/analysis/**"
+      - "scripts/analyze_nesmdb_batch.py"
+      - ".github/workflows/nesmdb-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  analyze-real-data:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install project and downloader
+        run: |
+          python -m pip install -e .
+          python -m pip install gdown
+
+      - name: Download official NES-MDB MIDI dataset
+        run: |
+          mkdir -p .cache/nesmdb
+          python -m gdown 1w2uo1Cmio4gz6nGUhZOtzF54kPkoKyo7 -O .cache/nesmdb/nesmdb_midi.tar.gz
+          tar -xzf .cache/nesmdb/nesmdb_midi.tar.gz -C .cache/nesmdb
+          find .cache/nesmdb -name '*.mid' | head -n 5
+
+      - name: Analyze sample of real NES-MDB songs
+        run: |
+          python scripts/analyze_nesmdb_batch.py .cache/nesmdb --limit 24 --output artifacts/nesmdb_sample_report.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('artifacts/nesmdb_sample_report.json')
+          d = json.loads(p.read_text(encoding='utf-8'))
+          print(json.dumps(d['summary'], indent=2))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nesmdb-sample-report
+          path: artifacts/nesmdb_sample_report.json
+          if-no-files-found: error
