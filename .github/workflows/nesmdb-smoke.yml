@@ -6,8 +6,10 @@ on:
       - "src/chiptune_agent_kit/analysis/**"
       - "scripts/analyze_nesmdb_batch.py"
       - "scripts/analyze_note_hygiene.py"
+      - "scripts/build_composition_view.py"
       - "scripts/build_pulse_casebook.py"
       - "scripts/build_pulse_window_casebook.py"
+      - "scripts/build_clean_pulse_window_casebook.py"
       - ".github/workflows/nesmdb-smoke.yml"
   workflow_dispatch:
 
@@ -31,59 +33,59 @@ jobs:
           python -m gdown 1w2uo1Cmio4gz6nGUhZOtzF54kPkoKyo7 -O .cache/nesmdb/nesmdb_midi.tar.gz
           tar -xzf .cache/nesmdb/nesmdb_midi.tar.gz -C .cache/nesmdb
 
-      - name: Analyze reproducible real-data sample
+      - name: Analyze reproducible raw real-data sample
         run: |
           python scripts/analyze_nesmdb_batch.py .cache/nesmdb \
             --limit 96 \
             --sample-strategy random \
             --seed 20260814 \
-            --output artifacts/nesmdb_sample_report.json
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          p = Path('artifacts/nesmdb_sample_report.json')
-          d = json.loads(p.read_text(encoding='utf-8'))
-          print(json.dumps(d['sample'], indent=2))
-          print(json.dumps(d['summary']['pulse_1_pulse_2'], indent=2))
-          print(json.dumps(d['summary']['pulse_1_pulse_2_onset_sensitivity'], indent=2))
-          PY
+            --output artifacts/nesmdb_sample_report_raw.json
 
       - name: Measure note hygiene sensitivity
         run: |
-          python scripts/analyze_note_hygiene.py artifacts/nesmdb_sample_report.json \
+          python scripts/analyze_note_hygiene.py artifacts/nesmdb_sample_report_raw.json \
             --root .cache/nesmdb \
             --output artifacts/note_hygiene_sensitivity.json
-          cat artifacts/note_hygiene_sensitivity.json
 
-      - name: Build pulse relationship casebook
+      - name: Build cleaned composition view
         run: |
-          python scripts/build_pulse_casebook.py artifacts/nesmdb_sample_report.json \
-            --count 5 \
-            --json-output artifacts/pulse_casebook.json \
-            --markdown-output artifacts/pulse_casebook.md
-          cat artifacts/pulse_casebook.md
-
-      - name: Inspect representative pulse windows
-        run: |
-          python scripts/build_pulse_window_casebook.py artifacts/pulse_casebook.json \
+          python scripts/build_composition_view.py artifacts/nesmdb_sample_report_raw.json \
             --root .cache/nesmdb \
+            --drop-micro-notes-at-or-below-seconds 0.001 \
+            --onset-tolerance-seconds 0.005 \
+            --output artifacts/nesmdb_sample_report_composition.json
+
+      - name: Build pulse relationship casebook from composition view
+        run: |
+          python scripts/build_pulse_casebook.py artifacts/nesmdb_sample_report_composition.json \
+            --count 5 \
+            --json-output artifacts/pulse_casebook_composition.json \
+            --markdown-output artifacts/pulse_casebook_composition.md
+          cat artifacts/pulse_casebook_composition.md
+
+      - name: Inspect cleaned representative pulse windows
+        run: |
+          python scripts/build_clean_pulse_window_casebook.py artifacts/pulse_casebook_composition.json \
+            --root .cache/nesmdb \
+            --drop-micro-notes-at-or-below-seconds 0.001 \
             --window-seconds 6 \
             --step-seconds 1 \
             --onset-tolerance-seconds 0.005 \
             --density-bin-seconds 0.5 \
             --max-event-rows 36 \
-            --json-output artifacts/pulse_window_casebook.json \
-            --markdown-output artifacts/pulse_window_casebook.md
-          sed -n '1,260p' artifacts/pulse_window_casebook.md
+            --json-output artifacts/pulse_window_casebook_composition.json \
+            --markdown-output artifacts/pulse_window_casebook_composition.md
+          sed -n '1,320p' artifacts/pulse_window_casebook_composition.md
 
       - uses: actions/upload-artifact@v4
         with:
           name: nesmdb-analysis-artifacts
           path: |
-            artifacts/nesmdb_sample_report.json
+            artifacts/nesmdb_sample_report_raw.json
             artifacts/note_hygiene_sensitivity.json
-            artifacts/pulse_casebook.json
-            artifacts/pulse_casebook.md
-            artifacts/pulse_window_casebook.json
-            artifacts/pulse_window_casebook.md
+            artifacts/nesmdb_sample_report_composition.json
+            artifacts/pulse_casebook_composition.json
+            artifacts/pulse_casebook_composition.md
+            artifacts/pulse_window_casebook_composition.json
+            artifacts/pulse_window_casebook_composition.md
           if-no-files-found: error
