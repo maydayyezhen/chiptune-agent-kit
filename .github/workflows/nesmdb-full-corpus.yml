@@ -1,0 +1,56 @@
+name: nesmdb-full-corpus
+
+on:
+  push:
+    branches:
+      - agent/pulse-relationship-analysis-v1
+    paths:
+      - analysis/nesmdb/full-corpus-trigger.txt
+
+jobs:
+  scan-full-corpus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install project and downloader
+        run: |
+          python -m pip install -e .
+          python -m pip install gdown
+
+      - name: Download official NES-MDB MIDI dataset
+        run: |
+          mkdir -p .cache/nesmdb
+          python -m gdown 1w2uo1Cmio4gz6nGUhZOtzF54kPkoKyo7 -O .cache/nesmdb/nesmdb_midi.tar.gz
+          tar -xzf .cache/nesmdb/nesmdb_midi.tar.gz -C .cache/nesmdb
+          echo "MIDI files: $(find .cache/nesmdb -type f -name '*.mid' | wc -l)"
+
+      - name: Scan all NES-MDB pulse recipes
+        run: |
+          python scripts/scan_nesmdb_full_corpus.py .cache/nesmdb \
+            --micro-note-floor-seconds 0.001 \
+            --window-seconds 6 \
+            --step-seconds 3 \
+            --onset-tolerance-seconds 0.005 \
+            --density-bin-seconds 0.5 \
+            --density-scales-seconds 4 8 16 \
+            --progress-every 250 \
+            --json-output artifacts/nesmdb_full_corpus_pulse_recipes.json \
+            --markdown-output artifacts/nesmdb_full_corpus_pulse_recipes.md
+
+      - name: Show corpus summary
+        run: cat artifacts/nesmdb_full_corpus_pulse_recipes.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nesmdb-full-corpus-pulse-recipes
+          path: |
+            artifacts/nesmdb_full_corpus_pulse_recipes.json
+            artifacts/nesmdb_full_corpus_pulse_recipes.md
+          if-no-files-found: error
+          retention-days: 30
