@@ -6,6 +6,7 @@ on:
       - "src/chiptune_agent_kit/analysis/**"
       - "scripts/analyze_nesmdb_batch.py"
       - "scripts/build_pulse_casebook.py"
+      - "scripts/build_pulse_window_casebook.py"
       - ".github/workflows/nesmdb-smoke.yml"
   workflow_dispatch:
 
@@ -54,6 +55,19 @@ jobs:
             --markdown-output artifacts/pulse_casebook.md
           cat artifacts/pulse_casebook.md
 
+      - name: Inspect representative pulse windows
+        run: |
+          python scripts/build_pulse_window_casebook.py artifacts/pulse_casebook.json \
+            --root .cache/nesmdb \
+            --window-seconds 6 \
+            --step-seconds 1 \
+            --onset-tolerance-seconds 0.005 \
+            --density-bin-seconds 0.5 \
+            --max-event-rows 36 \
+            --json-output artifacts/pulse_window_casebook.json \
+            --markdown-output artifacts/pulse_window_casebook.md
+          sed -n '1,260p' artifacts/pulse_window_casebook.md
+
       - uses: actions/upload-artifact@v4
         with:
           name: nesmdb-analysis-artifacts
@@ -61,4 +75,6 @@ jobs:
             artifacts/nesmdb_sample_report.json
             artifacts/pulse_casebook.json
             artifacts/pulse_casebook.md
+            artifacts/pulse_window_casebook.json
+            artifacts/pulse_window_casebook.md
           if-no-files-found: error
