@@ -10,6 +10,7 @@ on:
       - "scripts/build_pulse_casebook.py"
       - "scripts/build_pulse_window_casebook.py"
       - "scripts/build_clean_pulse_window_casebook.py"
+      - "scripts/extract_pulse_recipe_candidates.py"
       - ".github/workflows/nesmdb-smoke.yml"
   workflow_dispatch:
 
@@ -75,7 +76,13 @@ jobs:
             --max-event-rows 36 \
             --json-output artifacts/pulse_window_casebook_composition.json \
             --markdown-output artifacts/pulse_window_casebook_composition.md
-          sed -n '1,320p' artifacts/pulse_window_casebook_composition.md
+
+      - name: Extract pulse recipe candidates
+        run: |
+          python scripts/extract_pulse_recipe_candidates.py artifacts/pulse_window_casebook_composition.json \
+            --json-output artifacts/pulse_recipe_candidates.json \
+            --markdown-output artifacts/pulse_recipe_candidates.md
+          cat artifacts/pulse_recipe_candidates.md
 
       - uses: actions/upload-artifact@v4
         with:
@@ -88,4 +95,6 @@ jobs:
             artifacts/pulse_casebook_composition.md
             artifacts/pulse_window_casebook_composition.json
             artifacts/pulse_window_casebook_composition.md
+            artifacts/pulse_recipe_candidates.json
+            artifacts/pulse_recipe_candidates.md
           if-no-files-found: error
