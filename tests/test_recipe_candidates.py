@@ -65,7 +65,41 @@ def test_extracts_phase_shifted_riff_interlock() -> None:
         }
     }
     result = extract_pulse_recipe_candidates(casebook)
-    phase = next(item for item in result["candidates"] if item["recipe"] == "phase_shifted_riff_interlock")
+    phase = next(
+        item
+        for item in result["candidates"]
+        if item["recipe"] == "phase_shifted_riff_interlock"
+    )
     evidence = phase["evidence"]["pitch_sequence_alignment"]
     assert evidence["match_ratio"] == 1.0
     assert abs(evidence["median_time_offset_seconds_p1_minus_p2"] - 0.1) < 1e-9
+
+
+def test_deduplicates_same_recipe_window_from_multiple_discovery_groups() -> None:
+    local = {
+        "start_seconds": 5.0,
+        "end_seconds": 11.0,
+        "synchronized_onset_ratio": 0.2,
+        "active_overlap_ratio": 1.0,
+        "density_correlation": -0.7,
+        "signed_interval_sequence_semitones": [],
+        "pulse_1_motion_sequence_semitones": [],
+        "pulse_2_motion_sequence_semitones": [],
+        "density_bins": {"pulse_1": [3, 1], "pulse_2": [1, 3]},
+    }
+    item = {"name": "same.mid", "selected_window": local, "onset_rows": []}
+    casebook = {
+        "groups": {
+            "interlocking": [item],
+            "density_compensation": [item],
+        }
+    }
+
+    result = extract_pulse_recipe_candidates(casebook)
+    tradeoffs = [
+        candidate
+        for candidate in result["candidates"]
+        if candidate["recipe"] == "density_tradeoff_texture"
+    ]
+    assert len(tradeoffs) == 1
+    assert tradeoffs[0]["source_groups"] == ["density_compensation", "interlocking"]
