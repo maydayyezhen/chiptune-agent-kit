@@ -27,17 +27,21 @@ jobs:
           mkdir -p .cache/nesmdb
           python -m gdown 1w2uo1Cmio4gz6nGUhZOtzF54kPkoKyo7 -O .cache/nesmdb/nesmdb_midi.tar.gz
           tar -xzf .cache/nesmdb/nesmdb_midi.tar.gz -C .cache/nesmdb
-          find .cache/nesmdb -name '*.mid' | head -n 5
 
-      - name: Analyze sample of real NES-MDB songs
+      - name: Analyze reproducible real-data sample
         run: |
-          python scripts/analyze_nesmdb_batch.py .cache/nesmdb --limit 24 --output artifacts/nesmdb_sample_report.json
+          python scripts/analyze_nesmdb_batch.py .cache/nesmdb \
+            --limit 96 \
+            --sample-strategy random \
+            --seed 20260814 \
+            --output artifacts/nesmdb_sample_report.json
           python - <<'PY'
           import json
           from pathlib import Path
           p = Path('artifacts/nesmdb_sample_report.json')
           d = json.loads(p.read_text(encoding='utf-8'))
-          print(json.dumps(d['summary'], indent=2))
+          print(json.dumps(d['sample'], indent=2))
+          print(json.dumps(d['summary']['pulse_1_pulse_2'], indent=2))
           PY
 
       - uses: actions/upload-artifact@v4

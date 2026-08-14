@@ -76,11 +76,98 @@ def _tick_to_seconds(tick: int, ticks_per_beat: int, tempo_map: list[tuple[int, 
     return seconds
 
 
+def _parse_nes_midi(
+    path: str | Path,
+) -> tuple[
+    mido.MidiFile,
+    list[tuple[int, int]],
+    dict[str, list[NoteSpan]],
+    dict[str, dict[int, int]],
+    int,
+]:
+    midi_path = Path(path)
+    mid = mido.MidiFile(midi_path)
+    tempo_map = _tempo_map(mid)
+
+    spans: dict[str, list[NoteSpan]] = {
+        name: [] for name in ("pulse_1", "pulse_2", "triangle", "noise")
+    }
+    controller_counts = {name: {11: 0, 12: 0} for name in spans}
+    total_ticks = 0
+
+    for track in mid.tracks:
+        abs_tick = 0
+        voice_name: str | None = None
+        active: dict[tuple[int, int], list[int]] = {}
+
+        for msg in track:
+            abs_tick += msg.time
+            total_ticks = max(total_ticks, abs_tick)
+
+            if msg.type == "track_name":
+                voice_name = _normalize_name(msg.name)
+                continue
+
+            if voice_name is None:
+                continue
+
+            if msg.type == "control_change" and msg.control in (11, 12):
+                controller_counts[voice_name][msg.control] += 1
+                continue
+
+            if msg.type == "note_on" and msg.velocity > 0:
+                active.setdefault((msg.channel, msg.note), []).append(abs_tick)
+                continue
+
+            is_note_off = msg.type == "note_off" or (
+                msg.type == "note_on" and msg.velocity == 0
+            )
+            if not is_note_off:
+                continue
+
+            key = (msg.channel, msg.note)
+            starts = active.get(key)
+            if not starts:
+                continue
+
+            start_tick = starts.pop(0)
+            if not starts:
+                active.pop(key, None)
+
+            spans[voice_name].append(
+                NoteSpan(
+                    pitch=msg.note,
+                    start_seconds=_tick_to_seconds(
+                        start_tick, mid.ticks_per_beat, tempo_map
+                    ),
+                    end_seconds=_tick_to_seconds(
+                        abs_tick, mid.ticks_per_beat, tempo_map
+                    ),
+                )
+            )
+
+    for voice_spans in spans.values():
+        voice_spans.sort(key=lambda span: (span.start_seconds, span.end_seconds, span.pitch))
+
+    return mid, tempo_map, spans, controller_counts, total_ticks
+
+
+def extract_nes_note_spans(path: str | Path) -> dict[str, list[NoteSpan]]:
+    """Return separated NES voice note spans for relationship/pattern analysis."""
+
+    _, _, spans, _, _ = _parse_nes_midi(path)
+    return spans
+
+
 def _active_time_ratio(spans: list[NoteSpan], total_seconds: float) -> float:
     if not spans or total_seconds <= 0:
         return 0.0
 
-    intervals = sorted((s.start_seconds, s.end_seconds) for s in spans if s.end_seconds > s.start_seconds)
+    intervals = sorted(
+        (s.start_seconds, s.end_seconds)
+        for s in spans
+        if s.end_seconds > s.start_seconds
+    )
     if not intervals:
         return 0.0
 
@@ -96,7 +183,12 @@ def _active_time_ratio(spans: list[NoteSpan], total_seconds: float) -> float:
     return min(1.0, active / total_seconds)
 
 
-def _voice_stats(spans: list[NoteSpan], total_seconds: float, cc11_changes: int, cc12_changes: int) -> dict[str, Any]:
+def _voice_stats(
+    spans: list[NoteSpan],
+    total_seconds: float,
+    cc11_changes: int,
+    cc12_changes: int,
+) -> dict[str, Any]:
     if not spans:
         return {
             "note_count": 0,
@@ -130,61 +222,7 @@ def analyze_nes_midi(path: str | Path) -> dict[str, Any]:
     """Analyze separated NES-style MIDI tracks without assuming stored BPM is musical truth."""
 
     midi_path = Path(path)
-    mid = mido.MidiFile(midi_path)
-    tempo_map = _tempo_map(mid)
-
-    spans: dict[str, list[NoteSpan]] = {name: [] for name in ("pulse_1", "pulse_2", "triangle", "noise")}
-    controller_counts = {
-        name: {11: 0, 12: 0}
-        for name in spans
-    }
-    total_ticks = 0
-
-    for track in mid.tracks:
-        abs_tick = 0
-        voice_name: str | None = None
-        active: dict[tuple[int, int], list[int]] = {}
-
-        for msg in track:
-            abs_tick += msg.time
-            total_ticks = max(total_ticks, abs_tick)
-
-            if msg.type == "track_name":
-                voice_name = _normalize_name(msg.name)
-                continue
-
-            if voice_name is None:
-                continue
-
-            if msg.type == "control_change" and msg.control in (11, 12):
-                controller_counts[voice_name][msg.control] += 1
-                continue
-
-            if msg.type == "note_on" and msg.velocity > 0:
-                active.setdefault((msg.channel, msg.note), []).append(abs_tick)
-                continue
-
-            is_note_off = msg.type == "note_off" or (msg.type == "note_on" and msg.velocity == 0)
-            if not is_note_off:
-                continue
-
-            key = (msg.channel, msg.note)
-            starts = active.get(key)
-            if not starts:
-                continue
-
-            start_tick = starts.pop(0)
-            if not starts:
-                active.pop(key, None)
-
-            spans[voice_name].append(
-                NoteSpan(
-                    pitch=msg.note,
-                    start_seconds=_tick_to_seconds(start_tick, mid.ticks_per_beat, tempo_map),
-                    end_seconds=_tick_to_seconds(abs_tick, mid.ticks_per_beat, tempo_map),
-                )
-            )
-
+    mid, tempo_map, spans, controller_counts, total_ticks = _parse_nes_midi(midi_path)
     total_seconds = _tick_to_seconds(total_ticks, mid.ticks_per_beat, tempo_map)
 
     return {
@@ -192,7 +230,10 @@ def analyze_nes_midi(path: str | Path) -> dict[str, Any]:
         "ticks_per_beat": mid.ticks_per_beat,
         "stored_initial_tempo_bpm": mido.tempo2bpm(tempo_map[0][1]),
         "duration_seconds": total_seconds,
-        "timing_note": "Stored MIDI tempo is descriptive container metadata; do not assume it is the original musical BPM.",
+        "timing_note": (
+            "Stored MIDI tempo is descriptive container metadata; "
+            "do not assume it is the original musical BPM."
+        ),
         "voices": {
             name: _voice_stats(
                 voice_spans,
