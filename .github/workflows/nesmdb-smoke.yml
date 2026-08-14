@@ -5,6 +5,7 @@ on:
     paths:
       - "src/chiptune_agent_kit/analysis/**"
       - "scripts/analyze_nesmdb_batch.py"
+      - "scripts/analyze_note_hygiene.py"
       - "scripts/build_pulse_casebook.py"
       - "scripts/build_pulse_window_casebook.py"
       - ".github/workflows/nesmdb-smoke.yml"
@@ -47,6 +48,13 @@ jobs:
           print(json.dumps(d['summary']['pulse_1_pulse_2_onset_sensitivity'], indent=2))
           PY
 
+      - name: Measure note hygiene sensitivity
+        run: |
+          python scripts/analyze_note_hygiene.py artifacts/nesmdb_sample_report.json \
+            --root .cache/nesmdb \
+            --output artifacts/note_hygiene_sensitivity.json
+          cat artifacts/note_hygiene_sensitivity.json
+
       - name: Build pulse relationship casebook
         run: |
           python scripts/build_pulse_casebook.py artifacts/nesmdb_sample_report.json \
@@ -73,6 +81,7 @@ jobs:
           name: nesmdb-analysis-artifacts
           path: |
             artifacts/nesmdb_sample_report.json
+            artifacts/note_hygiene_sensitivity.json
             artifacts/pulse_casebook.json
             artifacts/pulse_casebook.md
             artifacts/pulse_window_casebook.json
