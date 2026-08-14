@@ -31,11 +31,11 @@ def _best_lagged_match(
 ) -> dict[str, Any] | None:
     best: dict[str, Any] | None = None
     for lag in range(-max_lag, max_lag + 1):
-        pairs = []
-        for index, value in enumerate(left):
-            other = index + lag
-            if 0 <= other < len(right):
-                pairs.append((value, right[other]))
+        pairs = [
+            (value, right[index + lag])
+            for index, value in enumerate(left)
+            if 0 <= index + lag < len(right)
+        ]
         if len(pairs) < min_pairs:
             continue
         matches = sum(a == b for a, b in pairs)
@@ -60,7 +60,9 @@ def _best_lagged_match(
     return best
 
 
-def _pitch_time_sequences(rows: list[dict[str, Any]]) -> tuple[list[tuple[int, float]], list[tuple[int, float]]]:
+def _pitch_time_sequences(
+    rows: list[dict[str, Any]],
+) -> tuple[list[tuple[int, float]], list[tuple[int, float]]]:
     p1 = [
         (int(row["pulse_1_pitch"]), float(row["relative_seconds"]))
         for row in rows
@@ -83,8 +85,8 @@ def _phase_match(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
         return None
 
     lag = int(best["lag_events"])
-    offsets = []
-    matching_offsets = []
+    offsets: list[float] = []
+    matching_offsets: list[float] = []
     for index, (pitch_1, time_1) in enumerate(p1):
         other = index + lag
         if not (0 <= other < len(p2)):
@@ -106,7 +108,36 @@ def _phase_match(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     }
 
 
-def extract_pulse_recipe_candidates(window_casebook: dict[str, Any]) -> dict[str, Any]:
+def _deduplicate_candidates(
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Count one musical window once even if several discovery buckets surface it."""
+
+    unique: dict[tuple[str, str, float, float], dict[str, Any]] = {}
+    for item in candidates:
+        window = item["window"]
+        key = (
+            str(item["recipe"]),
+            str(item["song"]),
+            round(float(window[0]), 6),
+            round(float(window[1]), 6),
+        )
+        group = str(item["source_group"])
+        if key not in unique:
+            clean = dict(item)
+            clean["source_groups"] = [group]
+            unique[key] = clean
+            continue
+        groups = unique[key].setdefault("source_groups", [])
+        if group not in groups:
+            groups.append(group)
+            groups.sort()
+    return list(unique.values())
+
+
+def extract_pulse_recipe_candidates(
+    window_casebook: dict[str, Any],
+) -> dict[str, Any]:
     candidates: list[dict[str, Any]] = []
 
     for group_name, items in window_casebook.get("groups", {}).items():
@@ -115,7 +146,10 @@ def extract_pulse_recipe_candidates(window_casebook: dict[str, Any]) -> dict[str
             sync = float(local["synchronized_onset_ratio"])
             overlap = float(local["active_overlap_ratio"])
             density_corr = local.get("density_correlation")
-            intervals = [int(value) for value in local.get("signed_interval_sequence_semitones", [])]
+            intervals = [
+                int(value)
+                for value in local.get("signed_interval_sequence_semitones", [])
+            ]
             runs = _interval_runs(intervals)
 
             if sync >= 0.90 and intervals:
@@ -144,7 +178,9 @@ def extract_pulse_recipe_candidates(window_casebook: dict[str, Any]) -> dict[str
                     })
 
                 long_runs = [run for run in runs if run["length"] >= 4]
-                distinct_long = {run["interval_semitones"] for run in long_runs}
+                distinct_long = {
+                    run["interval_semitones"] for run in long_runs
+                }
                 if len(long_runs) >= 2 and len(distinct_long) >= 2:
                     candidates.append({
                         "recipe": "parallel_interval_block_switch",
@@ -166,8 +202,18 @@ def extract_pulse_recipe_candidates(window_casebook: dict[str, Any]) -> dict[str
             if sync <= 0.10 and overlap >= 0.90:
                 phase = _phase_match(item.get("onset_rows", []))
                 motion = _best_lagged_match(
-                    [int(value) for value in local.get("pulse_1_motion_sequence_semitones", [])],
-                    [int(value) for value in local.get("pulse_2_motion_sequence_semitones", [])],
+                    [
+                        int(value)
+                        for value in local.get(
+                            "pulse_1_motion_sequence_semitones", []
+                        )
+                    ],
+                    [
+                        int(value)
+                        for value in local.get(
+                            "pulse_2_motion_sequence_semitones", []
+                        )
+                    ],
                     max_lag=4,
                     min_pairs=8,
                 )
@@ -209,13 +255,15 @@ def extract_pulse_recipe_candidates(window_casebook: dict[str, Any]) -> dict[str
                     ),
                 })
 
+    candidates = _deduplicate_candidates(candidates)
     counts = Counter(item["recipe"] for item in candidates)
     return {
         "candidate_counts": dict(sorted(counts.items())),
         "candidates": candidates,
         "interpretation_note": (
             "These recipes are automatically extracted hypotheses from cleaned composition windows. "
-            "They require listening and broader-corpus validation before promotion to SKILL/reference rules."
+            "Duplicate evidence surfaced by multiple discovery buckets is counted once. "
+            "Listening and broader-corpus validation are required before promotion to SKILL/reference rules."
         ),
     }
 
@@ -228,7 +276,7 @@ def render_recipe_candidates_markdown(result: dict[str, Any]) -> str:
         "",
     ]
     for recipe, count in result.get("candidate_counts", {}).items():
-        lines.append(f"- `{recipe}`: {count} evidence cases")
+        lines.append(f"- `{recipe}`: {count} unique evidence cases")
     lines.append("")
 
     grouped: dict[str, list[dict[str, Any]]] = {}
@@ -242,9 +290,10 @@ def render_recipe_candidates_markdown(result: dict[str, Any]) -> str:
         for item in items:
             evidence = item["evidence"]
             window = item["window"]
+            groups = ", ".join(item.get("source_groups", []))
             lines.append(
                 f"- `{item['song']}` `{window[0]:.3f}–{window[1]:.3f}s` "
-                f"status=`{item['status']}`"
+                f"status=`{item['status']}` discovery=`{groups}`"
             )
             if recipe == "parallel_interval_lock":
                 run = evidence["longest_constant_interval_run"]
