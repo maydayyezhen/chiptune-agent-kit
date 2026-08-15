@@ -7,6 +7,7 @@ on:
     paths:
       - "src/chiptune_agent_kit/analysis/triangle_patterns.py"
       - "scripts/scan_nesmdb_triangle_patterns.py"
+      - "scripts/build_triangle_casebook.py"
       - "tests/test_triangle_patterns.py"
       - ".github/workflows/nesmdb-triangle-patterns.yml"
   workflow_dispatch:
@@ -40,13 +41,26 @@ jobs:
             --progress-every 250 \
             --json-output artifacts/nesmdb_triangle_patterns.json \
             --markdown-output artifacts/nesmdb_triangle_patterns.md
-      - name: Show summary
-        run: cat artifacts/nesmdb_triangle_patterns.md
+      - name: Build representative Triangle casebook
+        run: |
+          python scripts/build_triangle_casebook.py \
+            artifacts/nesmdb_triangle_patterns.json \
+            .cache/nesmdb \
+            --count 5 \
+            --micro-note-floor-seconds 0.001 \
+            --json-output artifacts/nesmdb_triangle_casebook.json \
+            --markdown-output artifacts/nesmdb_triangle_casebook.md
+      - name: Show summary and casebook
+        run: |
+          cat artifacts/nesmdb_triangle_patterns.md
+          cat artifacts/nesmdb_triangle_casebook.md
       - uses: actions/upload-artifact@v4
         with:
           name: nesmdb-triangle-patterns-v1
           path: |
             artifacts/nesmdb_triangle_patterns.json
             artifacts/nesmdb_triangle_patterns.md
+            artifacts/nesmdb_triangle_casebook.json
+            artifacts/nesmdb_triangle_casebook.md
           if-no-files-found: error
           retention-days: 30
