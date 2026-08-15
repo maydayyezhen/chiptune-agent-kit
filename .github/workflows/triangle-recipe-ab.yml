@@ -1,0 +1,35 @@
+name: triangle-recipe-ab
+
+on:
+  push:
+    branches:
+      - agent/pulse-relationship-analysis-v1
+    paths:
+      - "src/chiptune_agent_kit/experiments/triangle_recipe_ab.py"
+      - "scripts/build_triangle_recipe_ab_pack.py"
+      - "tests/test_triangle_recipe_ab.py"
+      - ".github/workflows/triangle-recipe-ab.yml"
+  workflow_dispatch:
+
+jobs:
+  build-listening-pack:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install project
+        run: python -m pip install -e ".[dev]"
+      - name: Test experiment controls
+        run: pytest -q tests/test_triangle_recipe_ab.py
+      - name: Build MIDI and WAV pack
+        run: python scripts/build_triangle_recipe_ab_pack.py --output out/triangle_recipe_ab_v1
+      - name: Pack files
+        run: zip -j out/triangle_recipe_ab_v1.zip out/triangle_recipe_ab_v1/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: triangle-recipe-ab-v1
+          path: out/triangle_recipe_ab_v1.zip
+          if-no-files-found: error
+          retention-days: 30
