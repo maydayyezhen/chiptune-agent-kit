@@ -1,0 +1,37 @@
+name: pulse-recipe-integrated
+
+on:
+  push:
+    branches:
+      - agent/pulse-relationship-analysis-v1
+    paths:
+      - "src/chiptune_agent_kit/experiments/pulse_recipe_integrated.py"
+      - "scripts/build_pulse_recipe_integrated_song.py"
+      - "tests/test_pulse_recipe_integrated.py"
+      - ".github/workflows/pulse-recipe-integrated.yml"
+  workflow_dispatch:
+
+jobs:
+  build-listening-piece:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install project
+        run: python -m pip install -e ".[dev]"
+      - name: Test integrated composition
+        run: pytest -q tests/test_pulse_recipe_integrated.py
+      - name: Build MIDI and WAV
+        run: python scripts/build_pulse_recipe_integrated_song.py --output out/pulse_recipe_integrated_v1
+      - name: Show manifest
+        run: cat out/pulse_recipe_integrated_v1/manifest.json
+      - name: Pack files
+        run: zip -j out/pulse_recipe_integrated_v1.zip out/pulse_recipe_integrated_v1/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pulse-recipe-integrated-v1
+          path: out/pulse_recipe_integrated_v1.zip
+          if-no-files-found: error
+          retention-days: 30
