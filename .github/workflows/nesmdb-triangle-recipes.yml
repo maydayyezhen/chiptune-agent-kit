@@ -1,0 +1,52 @@
+name: nesmdb-triangle-recipes
+
+on:
+  push:
+    branches:
+      - agent/pulse-relationship-analysis-v1
+    paths:
+      - "src/chiptune_agent_kit/analysis/triangle_recipe_candidates.py"
+      - "scripts/scan_nesmdb_triangle_recipes.py"
+      - "tests/test_triangle_recipe_candidates.py"
+      - ".github/workflows/nesmdb-triangle-recipes.yml"
+  workflow_dispatch:
+
+jobs:
+  scan-refined-triangle-recipes:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install project and downloader
+        run: |
+          python -m pip install -e ".[dev]"
+          python -m pip install gdown
+      - name: Test refined Triangle detectors
+        run: pytest -q tests/test_triangle_recipe_candidates.py
+      - name: Download official NES-MDB MIDI dataset
+        run: |
+          mkdir -p .cache/nesmdb
+          python -m gdown 1w2uo1Cmio4gz6nGUhZOtzF54kPkoKyo7 -O .cache/nesmdb/nesmdb_midi.tar.gz
+          tar -xzf .cache/nesmdb/nesmdb_midi.tar.gz -C .cache/nesmdb
+          echo "MIDI files: $(find .cache/nesmdb -type f -name '*.mid' | wc -l)"
+      - name: Scan refined Triangle recipes
+        run: |
+          python scripts/scan_nesmdb_triangle_recipes.py .cache/nesmdb \
+            --floor 0.001 \
+            --window 8 \
+            --step 4 \
+            --progress-every 250 \
+            --json-output artifacts/nesmdb_triangle_recipes.json \
+            --markdown-output artifacts/nesmdb_triangle_recipes.md
+      - name: Show summary
+        run: cat artifacts/nesmdb_triangle_recipes.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nesmdb-triangle-recipes-v1
+          path: |
+            artifacts/nesmdb_triangle_recipes.json
+            artifacts/nesmdb_triangle_recipes.md
+          if-no-files-found: error
+          retention-days: 30
